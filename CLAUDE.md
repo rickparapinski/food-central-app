@@ -17,10 +17,14 @@ A mobile-first PWA for weekly meal planning, pantry management, barcode scanning
 ---
 
 ## Hosting
-- LXC container on homeserver, port 3000
-- Publicly accessible via Cloudflare Tunnel + custom domain
+- **GitHub:** `https://github.com/rickparapinski/food-central-app` (branch: `main`)
+- **LXC container IP:** `192.168.178.20`, port 3000
+- **App user/path:** `foodcentral` / `/home/foodcentral/app`
+- **Public URL:** `https://food.janna-montanna.uk`
+- **Cloudflare Tunnel:** locally managed via config.yml on a separate `finance-app` container; tunnel ID `42894c9b-56d7-4b2e-aa8f-4c0b68072e82`
+- **systemd service:** `food-central` (enabled, auto-starts on reboot)
+- **Production data:** `/data/food-central/food-central.db` (SQLite), `/data/food-central/photos/`
 - No auth (solo user)
-- Production data: `/data/food-central.db` (SQLite), `/data/photos/` (label images)
 
 ---
 
@@ -158,18 +162,71 @@ PHOTO_STORAGE_PATH=/data/photos           # not yet wired — reserved for label
 ## Common commands
 
 ```bash
+# Dev
 npm run dev                              # dev server (Turbopack, port 3000)
+npx tsc --noEmit                         # type-check (always run before pushing — build skips this on server)
 npm run build                            # production build
-npm start                                # run production build
 
-npx prisma migrate dev --name <name>     # create + apply migration (dev)
-npx prisma migrate deploy                # apply migrations (prod/container start)
+# Prisma
+npx prisma migrate dev --name <name>     # create + apply new migration (dev only)
+npx prisma migrate deploy                # apply pending migrations (prod)
 npx prisma generate                      # regenerate client after schema change
 npx prisma studio                        # DB browser UI
-
-# Prod backup
-sqlite3 /data/food-central.db .backup /data/backups/food-central-$(date +%F).db
 ```
+
+---
+
+## Deploying updates to production
+
+### Code-only change (no schema change)
+```bash
+# 1. local — push to GitHub
+git push
+
+# 2. on container (as foodcentral)
+cd ~/app
+git pull
+npm ci                        # only needed if package.json changed; safe to always run
+npm run build
+sudo systemctl restart food-central
+```
+
+### Schema change (new migration)
+```bash
+# 1. local — create and test the migration
+npx prisma migrate dev --name <description>   # creates migration SQL + updates local dev.db
+npx tsc --noEmit                              # verify types still pass
+git add prisma/migrations prisma/schema.prisma
+git commit -m "feat: <description>"
+git push
+
+# 2. on container (as foodcentral)
+cd ~/app
+git pull
+npm ci
+npx prisma migrate deploy     # applies new migration to /data/food-central/food-central.db
+npx prisma generate           # regenerates client from new schema
+npm run build
+sudo systemctl restart food-central
+```
+
+> **Important:** Never edit migration SQL files after they've been committed — Prisma tracks their checksums.
+> If you need to fix a migration, create a new one instead.
+
+### Checking the service after deploy
+```bash
+sudo systemctl status food-central
+journalctl -u food-central -n 30 --no-pager
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000   # should return 200
+```
+
+### DB backup (run on container as root)
+```bash
+sqlite3 /data/food-central/food-central.db ".backup /data/food-central/backups/food-central-$(date +%F).db"
+```
+
+### Build note
+`next.config.ts` has `typescript.ignoreBuildErrors: true` — the server doesn't have enough RAM for the TS build worker. Always run `npx tsc --noEmit` locally before pushing to catch type errors.
 
 ---
 
