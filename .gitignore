@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -48,5 +49,6 @@ next-env.d.ts
 *.db-wal
 *.db-shm
 
-# uploaded photos
-/public/photos
+# uploaded photos (keep the directory, ignore the contents)
+/public/photos/*
+!/public/photos/.gitkeep
