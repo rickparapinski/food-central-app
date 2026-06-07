@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Product {
+  id           String       @id @default(cuid())
+  barcode      String       @unique
+  name_de      String
+  name_en      String
+  calories     Float
+  protein      Float
+  carbs        Float
+  fat          Float
+  serving_size Float?
+  serving_unit String?
+  source       String       // "open_food_facts" | "custom"
+  photo_path   String?
+  created_at   DateTime     @default(now())
+  pantry_items PantryItem[]
+  macro_logs   MacroLog[]
+}
+
+model PantryItem {
+  id         String   @id @default(cuid())
+  product_id String
+  quantity   Float
+  unit       String   @default("g")
+  added_at   DateTime @default(now())
+  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  calories    Float    @default(2000)
+  protein     Float    @default(150)
+  carbs       Float    @default(200)
+  fat         Float    @default(70)
+  preferences String   @default("{}") // JSON: { dislikes, allergies, diet_style }
+  updated_at  DateTime @updatedAt
+}
+
+model MealPlan {
+  id           String       @id @default(cuid())
+  week_start   DateTime
+  plan         String       // JSON: 7 days × { breakfast, lunch, dinner, snack }
+  generated_at DateTime     @default(now())
+  grocery_list GroceryList?
+}
+
+model GroceryList {
+  id            String   @id @default(cuid())
+  meal_plan_id  String   @unique
+  items         String   // JSON: [{ name, quantity, unit, category }]
+  checked_items String   @default("[]") // JSON: [item_name]
+  created_at    DateTime @default(now())
+  meal_plan     MealPlan @relation(fields: [meal_plan_id], references: [id], onDelete: Cascade)
+}
+
+model MacroLog {
+  id         String   @id @default(cuid())
+  date       String   // YYYY-MM-DD
+  meal_name  String   // "breakfast" | "lunch" | "dinner" | "snack"
+  product_id String
+  quantity   Float
+  logged_at  DateTime @default(now())
+  product    Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+}
